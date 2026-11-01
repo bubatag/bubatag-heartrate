@@ -14,8 +14,8 @@
 // CONFIGURACAO WI-FI
 // =====================================================
 
-const char* WIFI_SSID = "FAMILIA CAMARGO COSTA";
-const char* WIFI_PASSWORD = "neco307090";
+const char* WIFI_SSID = "nome_da_rede";
+const char* WIFI_PASSWORD = "senha_da_rede";
 
 // =====================================================
 // CONFIGURACAO BUBATAG
