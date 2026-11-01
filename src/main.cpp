@@ -10,6 +10,8 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 
+#include <TinyGPSPlus.h>
+
 // =====================================================
 // CONFIGURACAO WI-FI
 // =====================================================
@@ -28,6 +30,23 @@ const char* API_HEALTH_URL =
   "https://api-bubatag.onrender.com/health";
 
 const char* NUMERO_COLEIRA = "esp-coleira";
+
+// =====================================================
+// GPS NEO-6M
+// =====================================================
+
+TinyGPSPlus gps;
+HardwareSerial SerialGPS(2);
+
+const int GPS_RX_PIN = 16;
+const int GPS_TX_PIN = 17;
+
+const unsigned long GPS_TIMEOUT = 10000;
+
+bool gpsDisponivel = false;
+
+double latitude = 0.0;
+double longitude = 0.0;
 
 // =====================================================
 // MAX30102
@@ -198,6 +217,50 @@ void testarConexaoAPI() {
   } else {
 
     Serial.println("Falha ao iniciar conexao com a API.");
+  }
+}
+
+// =====================================================
+// INICIALIZACAO DO GPS NEO-6M
+// =====================================================
+
+void inicializarGPS() {
+
+  SerialGPS.begin(
+    9600,
+    SERIAL_8N1,
+    GPS_RX_PIN,
+    GPS_TX_PIN
+  );
+
+  Serial.println("Comunicacao GPS preparada.");
+  Serial.println("Aguardando posicao valida do NEO-6M.");
+}
+
+// =====================================================
+// ATUALIZAR LOCALIZACAO GPS
+// =====================================================
+
+void atualizarGPS() {
+
+  while (SerialGPS.available() > 0) {
+
+    char caractere = SerialGPS.read();
+
+    gps.encode(caractere);
+  }
+
+  if (gps.location.isValid() &&
+      gps.location.age() <= GPS_TIMEOUT) {
+
+    latitude = gps.location.lat();
+    longitude = gps.location.lng();
+
+    gpsDisponivel = true;
+
+  } else {
+
+    gpsDisponivel = false;
   }
 }
 
@@ -407,18 +470,45 @@ void enviarTelemetria() {
   http.addHeader("Content-Type", "application/json");
 
   String json = "{";
+
   json += "\"n_coleira\":\"";
   json += NUMERO_COLEIRA;
   json += "\",";
+
   json += "\"temperatura\":";
   json += String(temperaturaC, 1);
   json += ",";
+
   json += "\"batimento_cardiaco\":";
   json += String(beatAvg);
+
+  // Envia coordenadas somente quando houver GPS valido.
+  if (gpsDisponivel) {
+
+    json += ",\"latitude\":";
+    json += String(latitude, 6);
+
+    json += ",\"longitude\":";
+    json += String(longitude, 6);
+  }
+
   json += "}";
 
   Serial.println("Enviando telemetria...");
   Serial.println(json);
+
+  if (gpsDisponivel) {
+
+    Serial.print("Latitude: ");
+    Serial.println(latitude, 6);
+
+    Serial.print("Longitude: ");
+    Serial.println(longitude, 6);
+
+  } else {
+
+    Serial.println("GPS sem posicao valida. Enviando sem coordenadas.");
+  }
 
   int codigoResposta = http.POST(json);
 
@@ -455,6 +545,9 @@ void setup() {
 
   Wire.begin(21, 22);
 
+  // Inicializa a comunicacao do GPS.
+  inicializarGPS();
+
   verificarDispositivosI2C();
 
   conectarWiFi();
@@ -480,6 +573,7 @@ void setup() {
   }
 
   Serial.println("DS18B20: Inicializado");
+  Serial.println("GPS: Preparado");
   Serial.println("Sistema iniciado!");
   Serial.println("------------------------------------------");
 }
@@ -495,7 +589,13 @@ void loop() {
   }
 
   // -------------------------------------------------
-  // 1. MAX30102
+  // 1. GPS
+  // -------------------------------------------------
+
+  atualizarGPS();
+
+  // -------------------------------------------------
+  // 2. MAX30102
   // -------------------------------------------------
 
   long irValue = 0;
@@ -508,7 +608,7 @@ void loop() {
   }
 
   // -------------------------------------------------
-  // 2. DS18B20
+  // 3. DS18B20
   // -------------------------------------------------
 
   if (millis() - lastTemperatureRequest >=
@@ -518,7 +618,7 @@ void loop() {
   }
 
   // -------------------------------------------------
-  // 3. MONITOR SERIAL
+  // 4. MONITOR SERIAL
   // -------------------------------------------------
 
   if (millis() - lastPrintTime >= PRINT_INTERVAL) {
@@ -568,6 +668,24 @@ void loop() {
       }
     }
 
+    // Situacao do GPS.
+    Serial.print("GPS: ");
+
+    if (gpsDisponivel) {
+
+      Serial.println("Posicao valida");
+
+      Serial.print("Latitude: ");
+      Serial.println(latitude, 6);
+
+      Serial.print("Longitude: ");
+      Serial.println(longitude, 6);
+
+    } else {
+
+      Serial.println("Aguardando sinal ou modulo GPS.");
+    }
+
     Serial.print("Wi-Fi: ");
 
     Serial.println(
@@ -580,7 +698,7 @@ void loop() {
   }
 
   // -------------------------------------------------
-  // 4. ENVIO PARA O BUBATAG
+  // 5. ENVIO PARA O BUBATAG
   // -------------------------------------------------
 
   if (millis() - lastSendTime >= SEND_INTERVAL) {
