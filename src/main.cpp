@@ -1,4 +1,3 @@
-
 #include <Wire.h>
 #include "MAX30105.h"
 #include "heartRate.h"
@@ -16,8 +15,8 @@
 // CONFIGURACAO WI-FI
 // =====================================================
 
-const char* WIFI_SSID = "nome_da_rede";
-const char* WIFI_PASSWORD = "senha_da_rede";
+const char* WIFI_SSID = "Bubatag";
+const char* WIFI_PASSWORD = "12345678";
 
 // =====================================================
 // CONFIGURACAO BUBATAG
@@ -669,23 +668,22 @@ void loop() {
     }
 
     // Situacao do GPS.
-    Serial.print("GPS: ");
+       Serial.print("GPS: ");
 
     if (gpsDisponivel) {
-
       Serial.println("Posicao valida");
-
       Serial.print("Latitude: ");
       Serial.println(latitude, 6);
-
       Serial.print("Longitude: ");
       Serial.println(longitude, 6);
-
     } else {
-
       Serial.println("Aguardando sinal ou modulo GPS.");
     }
 
+    Serial.print("GPS caracteres: ");
+    Serial.println(gps.charsProcessed());
+    Serial.print("GPS satelites: ");
+    Serial.println(gps.satellites.value());
     Serial.print("Wi-Fi: ");
 
     Serial.println(
